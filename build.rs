@@ -6,6 +6,7 @@ use std::path::PathBuf;
 fn main() {
     // Tell cargo to rerun build if any of the included headers change
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rustc-link-lib=gpiod");
 
     // Use bindgen to generate the bindings
     let bindings = bindgen::Builder::default()
