@@ -3,11 +3,8 @@ extern crate bindgen;
 use std::fs;
 use std::path::PathBuf;
 
-fn main() {
-    // Tell cargo to rerun build if any of the included headers change
-    println!("cargo:rerun-if-changed=wrapper.h");
-    println!("cargo:rustc-link-lib=gpiod");
-
+#[cfg(feature = "generate-bindings")]
+fn generate_bindings() {
     // Use bindgen to generate the bindings
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
@@ -25,4 +22,13 @@ fn main() {
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
+}
+
+fn main() {
+    // Tell cargo to rerun build if any of the included headers change
+    println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rustc-link-lib=gpiod");
+
+    #[cfg(feature = "generate-bindings")]
+    generate_bindings();
 }

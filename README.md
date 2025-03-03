@@ -46,3 +46,9 @@ make -j$(nproc)
 ```
 sudo make install
 ```
+
+# Regenerate bindings
+
+```
+cargo build --features generate-bindings
+```
