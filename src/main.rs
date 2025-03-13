@@ -7,7 +7,13 @@ use std::ffi::CString;
 
 include!("bindings/bindings.rs");
 
+// FIXME: These should ultimately be configurable, but will hardcode them for my board setup for
+// now.
+// Chip: A chip with pins on it. RPI's just have the 1, which will be at index 0
 const GPIO_CHIP_PATH: &str = "/dev/gpiochip0";
+// The pin/line. Refered to as offsets in documentation as when you have multiple chips and want to
+// refer to a specific pin, you refer to it by its offset from its chip index.
+const OFFSET: i64 = 21;
 
 fn main() {
     let path = CString::new(GPIO_CHIP_PATH).expect("CString::new failed");
@@ -34,6 +40,25 @@ fn main() {
     // SAFETY: Yet to be determined
     let name: *const i8 = unsafe { gpiod_chip_info_get_name(info) };
     println!("{}", unsafe { std::ffi::CStr::from_ptr(name).to_string_lossy() });
+   
+
+    // Create a settings object that will be used to configure the line
+    // SAFETY: settings must be freed using gpiod_line_settings_free() 
+    let settings = unsafe { gpiod_line_settings_new() };
+
+    // The DHT22 protocol initiate reading data by setting the pin to a pull up bias. Then, we pull
+    // low for between 1~10ms. We then pull up for 20-40us (will let the bias take care of that) 
+    // and await a response from the sensor.
+    // 
+    // SAFETY: settings must be freed using gpiod_line_settings_free()
+    unsafe { 
+        gpiod_line_settings_set_direction(settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_INPUT);
+        gpiod_line_settings_set_drive(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP);
+    };
+
+    // SAFETY: config must be explicitly freed when we are done with it.
+    let config = unsafe { gpiod_line_config_new() };
+
 
     // SAFETY: We explicitly checked info is not null when it was returned by gpiod_chip_get_info()
     unsafe { gpiod_chip_info_free(info) };
