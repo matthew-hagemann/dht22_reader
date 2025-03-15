@@ -27,6 +27,7 @@ fn generate_bindings() {
 fn main() {
     // Tell cargo to rerun build if any of the included headers change
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu");
     println!("cargo:rustc-link-lib=gpiod");
 
     #[cfg(feature = "generate-bindings")]
