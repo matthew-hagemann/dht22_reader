@@ -13,7 +13,7 @@ include!("bindings/bindings.rs");
 const GPIO_CHIP_PATH: &str = "/dev/gpiochip0";
 // The pin/line. Refered to as offsets in documentation as when you have multiple chips and want to
 // refer to a specific pin, you refer to it by its offset from its chip index.
-const OFFSET: i64 = 21;
+const OFFSET: std::os::raw::c_uint = 21;
 
 fn main() {
     let path = CString::new(GPIO_CHIP_PATH).expect("CString::new failed");
@@ -46,6 +46,11 @@ fn main() {
     // Create a settings object that will be used to configure the line
     // SAFETY: settings must be freed using gpiod_line_settings_free()
     let settings = unsafe { gpiod_line_settings_new() };
+    if settings.is_null() {
+        eprintln!("Failed to create GPIO settings object");
+        cleanup(Some(chip), Some(info), None, None);
+        return;
+    }
 
     // The DHT22 protocol initiate reading data by setting the pin to a pull up bias. Then, we pull
     // low for between 1~10ms. We then pull up for 20-40us (will let the bias take care of that)
@@ -62,6 +67,50 @@ fn main() {
 
     // SAFETY: config must be explicitly freed when we are done with it.
     let config = unsafe { gpiod_line_config_new() };
+    if config.is_null() {
+        eprintln!("Failed to create GPIO config object");
+        cleanup(Some(chip), Some(info), Some(settings), None);
+        return;
+    }
+
+    let result = unsafe { gpiod_line_config_add_line_settings(config, &OFFSET, 1, settings) };
+
+    if result != 0 {
+        eprintln!("Failed to add line settings to config");
+        return;
+    }
+
+    // Wait 1ms before pulling low
+    std::thread::sleep(std::time::Duration::from_millis(1));
+
+    cleanup(Some(chip), Some(info), Some(settings), Some(config));
+}
+
+fn cleanup(
+    chip: Option<*mut gpiod_chip>,
+    info: Option<*mut gpiod_chip_info>,
+    settings: Option<*mut gpiod_line_settings>,
+    config: Option<*mut gpiod_line_config>,
+) {
+    if let Some(cf) = config {
+        // SAFETY: We explicitly checked config is not null when it was returned by
+        // gpiod_line_config_new()
+        unsafe { gpiod_line_config_free(cf) };
+    }
+    if let Some(s) = settings {
+        // SAFETY: We explicitly checked settigns is not null when it was returned by
+        // gpiod_line_settings_new()
+        unsafe { gpiod_line_settings_free(s) };
+    }
+    if let Some(i) = info {
+        // SAFETY: We explicitly checked chip is not null when it was returned by gpiod_chip_open()
+        unsafe { gpiod_chip_info_free(i) };
+    }
+    if let Some(c) = chip {
+        // SAFETY: We explicitly checked info is not null when it was returned by gpiod_chip_get_info()
+        unsafe { gpiod_chip_close(c) };
+    }
+}
 
     // SAFETY: We explicitly checked info is not null when it was returned by gpiod_chip_get_info()
     unsafe { gpiod_chip_info_free(info) };
