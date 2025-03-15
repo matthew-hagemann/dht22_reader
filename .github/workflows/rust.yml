@@ -30,6 +30,12 @@ jobs:
           sudo make install
           sudo ldconfig
 
+      - name: Debug ldconfig for libgpiod
+        run: ldconfig -p | grep libgpiod
+
+      - name: Debug pkg-config for libgpiod
+        run: pkg-config --libs --cflags libgpiod
+
       - name: Lint with clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
