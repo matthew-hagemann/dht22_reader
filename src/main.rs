@@ -112,8 +112,73 @@ fn cleanup(
     }
 }
 
-    // SAFETY: We explicitly checked info is not null when it was returned by gpiod_chip_get_info()
-    unsafe { gpiod_chip_info_free(info) };
-    // SAFETY: We explicitly checked chip is not null when it was returned by gpiod_chip_open()
-    unsafe { gpiod_chip_close(chip) };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    // Counters to verify each free function is called.
+    static CONFIG_FREED: AtomicUsize = AtomicUsize::new(0);
+    static SETTINGS_FREED: AtomicUsize = AtomicUsize::new(0);
+    static INFO_FREED: AtomicUsize = AtomicUsize::new(0);
+    static CHIP_FREED: AtomicUsize = AtomicUsize::new(0);
+
+    // Override external functions provided by bindgen.
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_config_free(_ptr: *mut gpiod_line_config) {
+        CONFIG_FREED.fetch_add(1, Ordering::SeqCst);
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_settings_free(_ptr: *mut gpiod_line_settings) {
+        SETTINGS_FREED.fetch_add(1, Ordering::SeqCst);
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_chip_info_free(_ptr: *mut gpiod_chip_info) {
+        INFO_FREED.fetch_add(1, Ordering::SeqCst);
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_chip_close(_ptr: *mut gpiod_chip) {
+        CHIP_FREED.fetch_add(1, Ordering::SeqCst);
+    }
+
+    // TODO: create a trait that wraps the bindgen code and create a mock based on that trait for
+    // these functions
+    #[test]
+    fn test_cleanup_invokes_all_free_functions() {
+        // Reset counters.
+        CONFIG_FREED.store(0, Ordering::SeqCst);
+        SETTINGS_FREED.store(0, Ordering::SeqCst);
+        INFO_FREED.store(0, Ordering::SeqCst);
+        CHIP_FREED.store(0, Ordering::SeqCst);
+
+        // Pass dummy non-null pointers.
+        cleanup(
+            Some(1 as *mut gpiod_chip),
+            Some(1 as *mut gpiod_chip_info),
+            Some(1 as *mut gpiod_line_settings),
+            Some(1 as *mut gpiod_line_config),
+        );
+
+        assert_eq!(CONFIG_FREED.load(Ordering::SeqCst), 1);
+        assert_eq!(SETTINGS_FREED.load(Ordering::SeqCst), 1);
+        assert_eq!(INFO_FREED.load(Ordering::SeqCst), 1);
+        assert_eq!(CHIP_FREED.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_cleanup_handles_none() {
+        // Reset counters.
+        CONFIG_FREED.store(0, Ordering::SeqCst);
+        SETTINGS_FREED.store(0, Ordering::SeqCst);
+        INFO_FREED.store(0, Ordering::SeqCst);
+        CHIP_FREED.store(0, Ordering::SeqCst);
+
+        // Call cleanup with None for all pointers.
+        cleanup(None, None, None, None);
+
+        assert_eq!(CONFIG_FREED.load(Ordering::SeqCst), 0);
+        assert_eq!(SETTINGS_FREED.load(Ordering::SeqCst), 0);
+        assert_eq!(INFO_FREED.load(Ordering::SeqCst), 0);
+        assert_eq!(CHIP_FREED.load(Ordering::SeqCst), 0);
+    }
 }
