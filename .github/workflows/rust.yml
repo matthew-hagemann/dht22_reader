@@ -28,6 +28,7 @@ jobs:
           ./configure --prefix=/usr
           make -j$(nproc)
           sudo make install
+          sudo ldconfig
 
       - name: Lint with clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
