@@ -14,12 +14,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install C dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential gcc clang libclang-dev libgpiod-dev autoconf automake libtool pkg-config autoconf-archive
+
+      - name: Install libgpiod
+        run: |
+          git clone https://github.com/brgl/libgpiod.git
+          cd libgpiod
+          ./autogen.sh
+          ./configure --prefix=/usr
+          make -j$(nproc)
+          sudo make install
+
       - name: Lint with clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
       - name: Check formatting
         run: cargo fmt -- --check
+
       - name: Build
         run: cargo build --verbose
+
       - name: Run tests
         run: cargo test --verbose
-
