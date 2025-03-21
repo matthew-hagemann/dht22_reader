@@ -2,6 +2,8 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+// I'm checking for null ptr derefs already
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use std::ffi::CString;
 use thiserror::Error;
