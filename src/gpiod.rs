@@ -6,7 +6,6 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use thiserror::Error;
-use simple_test_case;
 
 include!("bindings/bindings.rs");
 
@@ -30,6 +29,8 @@ pub enum GpiodError {
     SetDirection(gpiod_line_direction),
     #[error("Failed to create GPIO config object")]
     CreateConfig,
+    #[error("Encountered an unexpected null pointer")]
+    NullPtr,
 }
 
 pub trait IGpiod {
@@ -83,6 +84,9 @@ impl IGpiod for Gpiod {
     /// - `chip` must be a valid, non-null pointer to an open `gpiod_chip` instance.
     /// - The returned `gpiod_chip_info` pointer must be freed properly.
     fn info(&self, chip: *mut gpiod_chip) -> Result<*mut gpiod_chip_info, GpiodError> {
+        if chip.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
         let result = unsafe { gpiod_chip_get_info(chip) };
         if result.is_null() {
             return Err(GpiodError::GetChipInfo);
@@ -94,6 +98,9 @@ impl IGpiod for Gpiod {
     /// # Safety
     /// - `info` must be a valid, non-null pointer to a `gpiod_chip_info` instance.
     fn name(&self, info: *mut gpiod_chip_info) -> Result<String, GpiodError> {
+        if info.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
         let result = unsafe { gpiod_chip_info_get_name(info) };
         if result.is_null() {
             return Err(GpiodError::GetChipName);
@@ -125,6 +132,9 @@ impl IGpiod for Gpiod {
         settings: *mut gpiod_line_settings,
         bias: gpiod_line_bias,
     ) -> Result<(), GpiodError> {
+        if settings.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
         let result = unsafe { gpiod_line_settings_set_drive(settings, bias) };
         if result != 0 {
             return Err(GpiodError::SetBias(bias));
@@ -140,6 +150,9 @@ impl IGpiod for Gpiod {
         settings: *mut gpiod_line_settings,
         direction: gpiod_line_direction,
     ) -> Result<(), GpiodError> {
+        if settings.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
         let result = unsafe { gpiod_line_settings_set_direction(settings, direction) };
         if result != 0 {
             return Err(GpiodError::SetDirection(direction));
@@ -168,6 +181,9 @@ impl IGpiod for Gpiod {
         config: *mut gpiod_line_config,
         settings: *mut gpiod_line_settings,
     ) -> Result<::std::os::raw::c_int, GpiodError> {
+        if config.is_null() || settings.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
         let result = unsafe { gpiod_line_config_add_line_settings(config, &OFFSET, 1, settings) };
         if result != 0 {
             return Err(GpiodError::CreateConfig);
@@ -205,15 +221,104 @@ pub fn cleanup(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use simple_test_case::test_case;
+    use std::ptr;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-    // Counters to verify each free function is called.
     static CONFIG_FREED: AtomicUsize = AtomicUsize::new(0);
     static SETTINGS_FREED: AtomicUsize = AtomicUsize::new(0);
     static INFO_FREED: AtomicUsize = AtomicUsize::new(0);
     static CHIP_FREED: AtomicUsize = AtomicUsize::new(0);
 
     // Override external functions provided by bindgen.
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_chip_open(ptr: *const i8) -> *mut gpiod_chip {
+        if ptr.is_null() {
+            return ptr::null_mut();
+        }
+        1 as *mut gpiod_chip
+    }
+
+    // Mock result for gpiod_chip_get_info
+    static GPIOD_CHIP_GET_INFO_RESULT: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_chip_get_info(_: *mut gpiod_chip) -> *mut gpiod_chip_info {
+        if GPIOD_CHIP_GET_INFO_RESULT.load(Ordering::SeqCst) {
+            return 1 as *mut gpiod_chip_info;
+        }
+        ptr::null_mut()
+    }
+
+    // Mock result for gpiod_chip_info_get_name
+    static GPIOD_CHIP_GET_NAME_RESULT: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_chip_info_get_name(_: *mut gpiod_chip_info) -> *const i8 {
+        if GPIOD_CHIP_GET_NAME_RESULT.load(Ordering::SeqCst) {
+            return b"dummy_chip\0".as_ptr() as *const i8;
+        }
+        ptr::null()
+    }
+
+    // Mock result for gpiod_line_settings_new
+    static GPIOD_SETTINGS_CREATED: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_settings_new() -> *mut gpiod_line_settings {
+        if GPIOD_SETTINGS_CREATED.load(Ordering::SeqCst) {
+            return 1 as *mut gpiod_line_settings;
+        }
+        ptr::null_mut()
+    }
+
+    // Mock result for gpiod_line_settings_set_drive
+    static GPIOD_SETTINGS_DRIVE_SET: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_settings_set_drive(
+        _: *mut gpiod_line_settings,
+        _: gpiod_line_bias,
+    ) -> i32 {
+        if GPIOD_SETTINGS_DRIVE_SET.load(Ordering::SeqCst) {
+            return 0;
+        }
+        -1
+    }
+
+    // Mock result for gpiod_line_settings_set_direction
+    static GPIOD_SETTINGS_DIRECTION_SET: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_settings_set_direction(
+        _: *mut gpiod_line_settings,
+        _: gpiod_line_direction,
+    ) -> i32 {
+        if GPIOD_SETTINGS_DIRECTION_SET.load(Ordering::SeqCst) {
+            return 0;
+        }
+        -1
+    }
+
+    // Mock result for gpiod_line_config_new
+    static GPIOD_CONFIG_CREATED: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_config_new() -> *mut gpiod_line_config {
+        if GPIOD_CONFIG_CREATED.load(Ordering::SeqCst) {
+            return 1 as *mut gpiod_line_config;
+        }
+        ptr::null_mut()
+    }
+
+    static GPIOD_CONFIG_ADD_SETTINGS_RESULT: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_config_add_line_settings(
+        _: *mut gpiod_line_config,
+        _: *const std::os::raw::c_uint,
+        _: i32,
+        _: *mut gpiod_line_settings,
+    ) -> i32 {
+        if GPIOD_CONFIG_ADD_SETTINGS_RESULT.load(Ordering::SeqCst) {
+            return 0;
+        }
+        -1
+    }
+
     #[no_mangle]
     pub unsafe extern "C" fn gpiod_line_config_free(_ptr: *mut gpiod_line_config) {
         CONFIG_FREED.fetch_add(1, Ordering::SeqCst);
@@ -231,8 +336,90 @@ mod tests {
         CHIP_FREED.fetch_add(1, Ordering::SeqCst);
     }
 
-    // TODO: create a trait that wraps the bindgen code and create a mock based on that trait for
-    // these functions
+    #[test_case(b"dummy\0".as_ptr() as *const i8; "create chip")]
+    #[test_case(ptr::null_mut(); "fail to create chip")]
+    #[test]
+    fn test_gpio_chip_open(ptr: *const i8) {
+        let chip = Gpiod {}.chip(ptr);
+        if ptr.is_null() {
+            assert!(chip.is_err());
+        } else {
+            assert!(chip.is_ok());
+        }
+    }
+
+    #[test_case(ptr::null_mut(), false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_chip, false; "fail to get chip info")]
+    #[test_case(1 as *mut gpiod_chip, true; "get chip info")]
+    #[test]
+    fn test_gpio_get_chip_info(chip: *mut gpiod_chip, desired: bool) {
+        GPIOD_CHIP_GET_INFO_RESULT.store(desired, Ordering::SeqCst);
+        let info = Gpiod {}.info(chip);
+        assert_eq!(info.is_err(), !desired);
+    }
+
+    #[test_case(ptr::null_mut(), false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_chip_info, false; "fail to get chip name")]
+    #[test_case(1 as *mut gpiod_chip_info, true; "get chip name")]
+    #[test]
+    fn test_gpio_get_chip_name(info: *mut gpiod_chip_info, desired: bool) {
+        GPIOD_CHIP_GET_NAME_RESULT.store(desired, Ordering::SeqCst);
+        let name = Gpiod {}.name(info);
+        assert_eq!(name.is_err(), !desired);
+    }
+
+    #[test_case(false; "fail to create settings")]
+    #[test_case(true; "create settings")]
+    #[test]
+    fn test_gpio_create_settings(desired: bool) {
+        GPIOD_SETTINGS_CREATED.store(desired, Ordering::SeqCst);
+        let settings = Gpiod {}.settings();
+        assert_eq!(settings.is_err(), !desired);
+    }
+
+    #[test_case(ptr::null_mut(), false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_line_settings, false; "fail to set drive")]
+    #[test_case(1 as *mut gpiod_line_settings, true; "set drive")]
+    #[test]
+    fn test_gpio_set_drive(settings: *mut gpiod_line_settings, desired: bool) {
+        GPIOD_SETTINGS_DRIVE_SET.store(desired, Ordering::SeqCst);
+        let result = Gpiod {}.settings_set_drive(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP);
+        assert_eq!(result.is_err(), !desired);
+    }
+
+    #[test_case(ptr::null_mut(), false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_line_settings, false; "fail to set direction")]
+    #[test_case(1 as *mut gpiod_line_settings, true; "set direction")]
+    #[test]
+    fn test_gpio_set_direction(settings: *mut gpiod_line_settings, desired: bool) {
+        GPIOD_SETTINGS_DIRECTION_SET.store(desired, Ordering::SeqCst);
+        let result = Gpiod {}.settings_set_direction(settings, 1);
+        assert_eq!(result.is_err(), !desired);
+    }
+
+    #[test_case(false; "fail to create config")]
+    #[test_case(true; "create config")]
+    #[test]
+    fn test_gpio_create_config(desired: bool) {
+        GPIOD_CONFIG_CREATED.store(desired, Ordering::SeqCst);
+        let config = Gpiod {}.config();
+        assert_eq!(config.is_err(), !desired);
+    }
+
+    #[test_case(ptr::null_mut(), ptr::null_mut(), false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_line_config, 1 as *mut gpiod_line_settings, false; "fail to add settings")]
+    #[test_case(1 as *mut gpiod_line_config, 1 as *mut gpiod_line_settings, true; "add settings")]
+    #[test]
+    fn test_gpio_add_settings(
+        config: *mut gpiod_line_config,
+        settings: *mut gpiod_line_settings,
+        desired: bool,
+    ) {
+        GPIOD_CONFIG_ADD_SETTINGS_RESULT.store(desired, Ordering::SeqCst);
+        let result = Gpiod {}.config_add_settings(config, settings);
+        assert_eq!(result.is_err(), !desired);
+    }
+
     #[test]
     fn test_cleanup_invokes_all_free_functions() {
         // Reset counters.
