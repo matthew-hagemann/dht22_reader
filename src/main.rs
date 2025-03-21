@@ -86,4 +86,3 @@ fn main() {
 
     cleanup(Some(chip), Some(info), Some(settings), Some(config));
 }
-
