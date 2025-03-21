@@ -4,109 +4,169 @@
 #![allow(non_snake_case)]
 
 use std::ffi::CString;
+use thiserror::Error;
 
 include!("bindings/bindings.rs");
+
+#[derive(Error, Debug)]
+pub enum GpiodError {
+    #[error("Failed to open GPIO chip")]
+    OpenChip,
+    #[error("Failed to get chip info")]
+    GetChipInfo,
+    #[error("Failed to get chip name")]
+    GetChipName,
+    #[error("Failed to create GPIO settings object")]
+    CreateSettings,
+    #[error("Failed to set bias on settings object with bias {0}")]
+    SetBias(gpiod_line_bias),
+    #[error("Failed to set direction on settings object with direction {0}")]
+    SetDirection(gpiod_line_direction),
+    #[error("Failed to create GPIO config object")]
+    CreateConfig,
+}
+
 pub trait IGpiod {
+    fn chip(&self, ptr: *const i8) -> Result<*mut gpiod_chip, GpiodError>;
+
+    fn info(&self, chip: *mut gpiod_chip) -> Result<*mut gpiod_chip_info, GpiodError>;
+
+    fn name(&self, info: *mut gpiod_chip_info) -> Result<String, GpiodError>;
+
+    fn settings(&self) -> Result<*mut gpiod_line_settings, GpiodError>;
+
+    fn settings_set_drive(
+        &self,
+        settings: *mut gpiod_line_settings,
+        bias: gpiod_line_bias,
+    ) -> Result<(), GpiodError>;
+
+    fn settings_set_direction(
+        &self,
+        settings: *mut gpiod_line_settings,
+        direction: gpiod_line_direction,
+    ) -> Result<(), GpiodError>;
+
+    fn config(&self) -> Result<*mut gpiod_line_config, GpiodError>;
+
+    fn config_add_settings(
+        &self,
+        config: *mut gpiod_line_config,
+        settings: *mut gpiod_line_settings,
+    ) -> Result<::std::os::raw::c_int, GpiodError>;
+}
+
+/// Concrete implementation of the GPIO device.
+pub struct Gpiod {}
+
+impl IGpiod for Gpiod {
     /// Opens a GPIO chip.
     ///
     /// # Safety
-    /// - The caller must ensure that `ptr` is a valid, null-terminated C string
-    ///   representing a valid GPIO chip path.
     /// - The returned `gpiod_chip` pointer must be freed properly.
-    unsafe fn chip(&self, ptr: *const i8) -> *mut gpiod_chip;
-
+    fn chip(&self, ptr: *const i8) -> Result<*mut gpiod_chip, GpiodError> {
+        let result = unsafe { gpiod_chip_open(ptr) };
+        if result.is_null() {
+            return Err(GpiodError::OpenChip);
+        }
+        Ok(result)
+    }
     /// Retrieves chip information.
     ///
     /// # Safety
     /// - `chip` must be a valid, non-null pointer to an open `gpiod_chip` instance.
     /// - The returned `gpiod_chip_info` pointer must be freed properly.
-    unsafe fn info(&self, chip: *mut gpiod_chip) -> *mut gpiod_chip_info;
-
+    fn info(&self, chip: *mut gpiod_chip) -> Result<*mut gpiod_chip_info, GpiodError> {
+        let result = unsafe { gpiod_chip_get_info(chip) };
+        if result.is_null() {
+            return Err(GpiodError::GetChipInfo);
+        }
+        Ok(result)
+    }
     /// Retrieves the name of a GPIO chip.
     ///
     /// # Safety
     /// - `info` must be a valid, non-null pointer to a `gpiod_chip_info` instance.
-    unsafe fn name(&self, info: *mut gpiod_chip_info) -> *const i8;
-
+    fn name(&self, info: *mut gpiod_chip_info) -> Result<String, GpiodError> {
+        let result = unsafe { gpiod_chip_info_get_name(info) };
+        if result.is_null() {
+            return Err(GpiodError::GetChipName);
+        }
+        // Safety: We checked that result is not null
+        Ok(unsafe {
+            std::ffi::CStr::from_ptr(result)
+                .to_string_lossy()
+                .to_string()
+        })
+    }
     /// Creates a new GPIO line settings object.
     ///
     /// # Safety
     /// - The caller must ensure that the returned pointer is freed using `gpiod_line_settings_free()`.
-    unsafe fn settings(&self) -> *mut gpiod_line_settings;
-
+    fn settings(&self) -> Result<*mut gpiod_line_settings, GpiodError> {
+        let result = unsafe { gpiod_line_settings_new() };
+        if result.is_null() {
+            return Err(GpiodError::CreateSettings);
+        }
+        Ok(result)
+    }
     /// Sets the drive bias for a GPIO line.
     ///
     /// # Safety
     /// - `settings` must be a valid, non-null pointer to a `gpiod_line_settings` instance.
-    unsafe fn settings_set_drive(&self, settings: *mut gpiod_line_settings, bias: gpiod_line_bias);
-
+    fn settings_set_drive(
+        &self,
+        settings: *mut gpiod_line_settings,
+        bias: gpiod_line_bias,
+    ) -> Result<(), GpiodError> {
+        let result = unsafe { gpiod_line_settings_set_drive(settings, bias) };
+        if result != 0 {
+            return Err(GpiodError::SetBias(bias));
+        }
+        Ok(())
+    }
     /// Sets the direction of a GPIO line.
     ///
     /// # Safety
     /// - `settings` must be a valid, non-null pointer to a `gpiod_line_settings` instance.
-    unsafe fn settings_set_direction(
+    fn settings_set_direction(
         &self,
         settings: *mut gpiod_line_settings,
         direction: gpiod_line_direction,
-    );
-
+    ) -> Result<(), GpiodError> {
+        let result = unsafe { gpiod_line_settings_set_direction(settings, direction) };
+        if result != 0 {
+            return Err(GpiodError::SetDirection(direction));
+        }
+        Ok(())
+    }
     /// Creates a new GPIO line configuration object.
     ///
     /// # Safety
     /// - The caller must ensure that the returned pointer is freed using `gpiod_line_config_free()`.
-    unsafe fn config(&self) -> *mut gpiod_line_config;
+    fn config(&self) -> Result<*mut gpiod_line_config, GpiodError> {
+        let result = unsafe { gpiod_line_config_new() };
+        if result.is_null() {
+            return Err(GpiodError::CreateConfig);
+        }
+        Ok(result)
+    }
 
     /// Adds a line setting to a configuration object.
     ///
     /// # Safety
     /// - `config` must be a valid, non-null pointer to a `gpiod_line_config` instance.
     /// - `settings` must be a valid, non-null pointer to a `gpiod_line_settings` instance.
-    unsafe fn config_add_settings(
+    fn config_add_settings(
         &self,
         config: *mut gpiod_line_config,
         settings: *mut gpiod_line_settings,
-    ) -> ::std::os::raw::c_int;
-}
-
-pub struct Gpiod {}
-
-impl IGpiod for Gpiod {
-    unsafe fn chip(&self, ptr: *const i8) -> *mut gpiod_chip {
-        unsafe { gpiod_chip_open(ptr) }
-    }
-    unsafe fn info(&self, chip: *mut gpiod_chip) -> *mut gpiod_chip_info {
-        unsafe { gpiod_chip_get_info(chip) }
-    }
-    unsafe fn name(&self, info: *mut gpiod_chip_info) -> *const i8 {
-        unsafe { gpiod_chip_info_get_name(info) }
-    }
-    unsafe fn settings(&self) -> *mut gpiod_line_settings {
-        unsafe { gpiod_line_settings_new() }
-    }
-    unsafe fn settings_set_drive(&self, settings: *mut gpiod_line_settings, bias: gpiod_line_bias) {
-        unsafe {
-            gpiod_line_settings_set_drive(settings, bias);
-        };
-    }
-    unsafe fn settings_set_direction(
-        &self,
-        settings: *mut gpiod_line_settings,
-        direction: gpiod_line_direction,
-    ) {
-        unsafe {
-            gpiod_line_settings_set_direction(settings, direction);
+    ) -> Result<::std::os::raw::c_int, GpiodError> {
+        let result = unsafe { gpiod_line_config_add_line_settings(config, &OFFSET, 1, settings) };
+        if result != 0 {
+            return Err(GpiodError::CreateConfig);
         }
-    }
-    unsafe fn config(&self) -> *mut gpiod_line_config {
-        unsafe { gpiod_line_config_new() }
-    }
-
-    unsafe fn config_add_settings(
-        &self,
-        config: *mut gpiod_line_config,
-        settings: *mut gpiod_line_settings,
-    ) -> ::std::os::raw::c_int {
-        unsafe { gpiod_line_config_add_line_settings(config, &OFFSET, 1, settings) }
+        Ok(result)
     }
 }
 
@@ -124,62 +184,62 @@ fn main() {
 
     let gpiod = Gpiod {};
 
-    // SAFETY: Closed at the end of the program to ensure all resources are released
-    // SAFTEY: path_ptr can't be NULL, we just set it based on a const
-    let chip: *mut gpiod_chip = unsafe { gpiod.chip(path_ptr) };
+    let chip = match gpiod.chip(path_ptr) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}", e);
+            return;
+        }
+    };
 
-    // Null check chip. Null is returned if an error occured.
-    if chip.is_null() {
-        eprintln!("Failed to open GPIO chip");
-        return;
-    }
+    let info = match gpiod.info(chip) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("{}", e);
+            cleanup(Some(chip), None, None, None);
+            return;
+        }
+    };
 
-    // SAFETY: Must be explicitly freed using gpiod_chip_info_free()
-    let info: *mut gpiod_chip_info = unsafe { gpiod.info(chip) };
-    if info.is_null() {
-        eprintln!("Failed to get chip info");
-        // SAFETY: questionable at best, there should be a smarter way of doing this...
-        cleanup(Some(chip), None, None, None);
-        return;
-    }
+    let name = match gpiod.name(info) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("{}", e);
+            cleanup(Some(chip), Some(info), None, None);
+            return;
+        }
+    };
+    println!("{}", name);
 
-    // SAFETY: Yet to be determined
-    let name: *const i8 = unsafe { gpiod.name(info) };
-    println!("{}", unsafe {
-        std::ffi::CStr::from_ptr(name).to_string_lossy()
-    });
-
-    // Create a settings object that will be used to configure the line
-    // SAFETY: settings must be freed using gpiod_line_settings_free()
-    let settings = unsafe { gpiod.settings() };
-    if settings.is_null() {
-        eprintln!("Failed to create GPIO settings object");
-        cleanup(Some(chip), Some(info), None, None);
-        return;
-    }
+    let settings = match gpiod.settings() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{}", e);
+            cleanup(Some(chip), Some(info), None, None);
+            return;
+        }
+    };
 
     // The DHT22 protocol initiate reading data by setting the pin to a pull up bias. Then, we pull
     // low for between 1~10ms. We then pull up for 20-40us (will let the bias take care of that)
     // and await a response from the sensor.
-    unsafe {
-        gpiod.settings_set_direction(settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_INPUT)
+    gpiod
+        .settings_set_direction(settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_OUTPUT)
+        .unwrap();
+    gpiod
+        .settings_set_drive(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP)
+        .unwrap();
+
+    let config = match gpiod.config() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}", e);
+            cleanup(Some(chip), Some(info), Some(settings), None);
+            return;
+        }
     };
-    unsafe { gpiod.settings_set_drive(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP) };
 
-    // SAFETY: config must be explicitly freed when we are done with it.
-    let config = unsafe { gpiod.config() };
-    if config.is_null() {
-        eprintln!("Failed to create GPIO config object");
-        cleanup(Some(chip), Some(info), Some(settings), None);
-        return;
-    }
-
-    let result = unsafe { gpiod.config_add_settings(config, settings) };
-
-    if result != 0 {
-        eprintln!("Failed to add line settings to config");
-        return;
-    }
+    gpiod.config_add_settings(config, settings).unwrap();
 
     // Wait 1ms before pulling low
     std::thread::sleep(std::time::Duration::from_millis(1));
