@@ -2,12 +2,13 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+#![allow(dead_code)]
 // I'm checking for null ptr derefs already
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-use thiserror::Error;
-
 include!("bindings/bindings.rs");
+
+use thiserror::Error;
 
 // The pin/line. Refered to as offsets in documentation as when you have multiple chips and want to
 // refer to a specific pin, you refer to it by its offset from its chip index.
@@ -220,6 +221,8 @@ pub fn cleanup(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::manual_c_str_literals)]
+
     use super::*;
     use simple_test_case::test_case;
     use std::ptr;

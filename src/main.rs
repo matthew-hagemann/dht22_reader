@@ -2,8 +2,11 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+#![allow(dead_code)]
 // I'm checking for null ptr derefs already
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+
+include!("bindings/bindings.rs");
 
 // FIXME: These should ultimately be configurable, but will hardcode them for my board setup for
 // now.
@@ -12,7 +15,6 @@ const GPIO_CHIP_PATH: &str = "/dev/gpiochip0";
 
 mod gpiod;
 
-include!("bindings/bindings.rs");
 use gpiod::{cleanup, Gpiod, IGpiod};
 use std::ffi::CString;
 
