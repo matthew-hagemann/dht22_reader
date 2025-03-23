@@ -15,7 +15,7 @@ const GPIO_CHIP_PATH: &str = "/dev/gpiochip0";
 
 mod gpiod;
 
-use gpiod::{cleanup, Gpiod, IGpiod};
+use gpiod::{cleanup, Gpiod, IGpiod, OFFSET};
 use std::ffi::CString;
 
 fn main() {
@@ -84,7 +84,11 @@ fn main() {
     // Wait 1ms before pulling low
     std::thread::sleep(std::time::Duration::from_millis(1));
     
-    let _request = gpiod.chip_request_lines(chip, config);
+    let request = gpiod.chip_request_lines(chip, config).unwrap();
+   
+    // Pull high for 40us
+    gpiod.line_request_set_value(request, OFFSET, 1).unwrap();
+    std::thread::sleep(std::time::Duration::from_micros(40));
 
     cleanup(Some(chip), Some(info), Some(settings), Some(config));
 }

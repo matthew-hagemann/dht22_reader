@@ -14,7 +14,7 @@ use thiserror::Error;
 
 // The pin/line. Refered to as offsets in documentation as when you have multiple chips and want to
 // refer to a specific pin, you refer to it by its offset from its chip index.
-const OFFSET: std::os::raw::c_uint = 21;
+pub const OFFSET: std::os::raw::c_uint = 21;
 
 #[derive(Error, Debug)]
 pub enum GpiodError {
@@ -36,6 +36,8 @@ pub enum GpiodError {
     NullPtr,
     #[error("Failed to create line request")]
     LineRequest,
+    #[error("Failed to set line request value")]
+    LineRequestSetValue,
 }
 
 // FIXME: this is the wrong abstraction, as ideally we want to make use of implementing drop on
@@ -85,6 +87,13 @@ pub trait IGpiod {
         chip: *mut gpiod_chip,
         line_cfg: *mut gpiod_line_config,
     ) -> Result<*mut gpiod_line_request, GpiodError>;
+
+    fn line_request_set_value(
+        &self,
+        request: *mut gpiod_line_request,
+        offset: ::std::os::raw::c_uint,
+        value: gpiod_line_value,
+    ) -> Result<(), GpiodError>;
 }
 
 /// Concrete implementation of the GPIO device.
@@ -235,8 +244,29 @@ impl IGpiod for Gpiod {
         }
         Ok(result)
     }
+
+    /// Sets the value of a GPIO line request.
+    ///
+    /// # Safety
+    /// - `request` must be a valid, non-null pointer to a `gpiod_line_request` instance.
+    fn line_request_set_value(
+        &self,
+        request: *mut gpiod_line_request,
+        offset: ::std::os::raw::c_uint,
+        value: gpiod_line_value,
+    ) -> Result<(), GpiodError> {
+        if request.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
+        let result = unsafe { gpiod_line_request_set_value(request, offset, value) };
+        if result != 0 {
+            return Err(GpiodError::LineRequestSetValue);
+        }
+        Ok(())
+    }
 }
 
+// FIXME: Can this move into a Drop implementation?
 pub fn cleanup(
     chip: Option<*mut gpiod_chip>,
     info: Option<*mut gpiod_chip_info>,
