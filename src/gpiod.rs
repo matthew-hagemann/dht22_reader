@@ -409,6 +409,19 @@ mod tests {
         ptr::null_mut()
     }
 
+    static GPIOD_LINE_REQUEST_SET_VALUE_RESULT: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_request_set_value(
+        _: *mut gpiod_line_request,
+        _: std::os::raw::c_uint,
+        _: gpiod_line_value,
+    ) -> i32 {
+        if GPIOD_LINE_REQUEST_SET_VALUE_RESULT.load(Ordering::SeqCst) {
+            return 0;
+        }
+        -1
+    }
+
     #[no_mangle]
     pub unsafe extern "C" fn gpiod_line_config_free(_ptr: *mut gpiod_line_config) {
         CONFIG_FREED.fetch_add(1, Ordering::SeqCst);
@@ -521,6 +534,21 @@ mod tests {
     ) {
         GPIOD_CHIP_REQUEST_LINES_RESULT.store(desired, Ordering::SeqCst);
         let result = Gpiod {}.chip_request_lines(chip, line_cfg);
+        assert_eq!(result.is_err(), !desired);
+    }
+
+    #[test_case(ptr::null_mut(), 0, 1, false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_line_request, 0, 1, false; "fail to set value")]
+    #[test_case(1 as *mut gpiod_line_request, 0, 1, true; "set value")]
+    #[test]
+    fn test_gpio_line_request_set_value(
+        request: *mut gpiod_line_request,
+        offset: std::os::raw::c_uint,
+        value: gpiod_line_value,
+        desired: bool,
+    ) {
+        GPIOD_LINE_REQUEST_SET_VALUE_RESULT.store(desired, Ordering::SeqCst);
+        let result = Gpiod {}.line_request_set_value(request, offset, value);
         assert_eq!(result.is_err(), !desired);
     }
 
