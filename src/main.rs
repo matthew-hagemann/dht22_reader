@@ -83,6 +83,8 @@ fn main() {
 
     // Wait 1ms before pulling low
     std::thread::sleep(std::time::Duration::from_millis(1));
+    
+    let _request = gpiod.chip_request_lines(chip, config);
 
     cleanup(Some(chip), Some(info), Some(settings), Some(config));
 }

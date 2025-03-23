@@ -8,6 +8,8 @@
 
 include!("bindings/bindings.rs");
 
+use std::ptr;
+
 use thiserror::Error;
 
 // The pin/line. Refered to as offsets in documentation as when you have multiple chips and want to
@@ -32,6 +34,8 @@ pub enum GpiodError {
     CreateConfig,
     #[error("Encountered an unexpected null pointer")]
     NullPtr,
+    #[error("Failed to create line request")]
+    LineRequest,
 }
 
 pub trait IGpiod {
@@ -62,6 +66,12 @@ pub trait IGpiod {
         config: *mut gpiod_line_config,
         settings: *mut gpiod_line_settings,
     ) -> Result<::std::os::raw::c_int, GpiodError>;
+
+    fn chip_request_lines(
+        &self,
+        chip: *mut gpiod_chip,
+        line_cfg: *mut gpiod_line_config,
+    ) -> Result<*mut gpiod_line_request, GpiodError>;
 }
 
 /// Concrete implementation of the GPIO device.
@@ -188,6 +198,27 @@ impl IGpiod for Gpiod {
         let result = unsafe { gpiod_line_config_add_line_settings(config, &OFFSET, 1, settings) };
         if result != 0 {
             return Err(GpiodError::CreateConfig);
+        }
+        Ok(result)
+    }
+
+    /// Requests a GPIO line.
+    ///
+    /// # Safety
+    /// - `chip` must be a valid, non-null pointer to a `gpiod_chip` instance.
+    /// - `line_cfg` must be a valid, non-null pointer to a `gpiod_line_config` instance.
+    /// - The returned `gpiod_line_request` pointer must be freed properly.
+    fn chip_request_lines(
+        &self,
+        chip: *mut gpiod_chip,
+        line_cfg: *mut gpiod_line_config,
+    ) -> Result<*mut gpiod_line_request, GpiodError> {
+        if chip.is_null() || line_cfg.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
+        let result = unsafe { gpiod_chip_request_lines(chip, ptr::null_mut(), line_cfg) };
+        if result.is_null() {
+            return Err(GpiodError::LineRequest);
         }
         Ok(result)
     }
@@ -322,6 +353,19 @@ mod tests {
         -1
     }
 
+    static GPIOD_CHIP_REQUEST_LINES_RESULT: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_chip_request_lines(
+        _: *mut gpiod_chip,
+        _: *mut gpiod_request_config,
+        _: *mut gpiod_line_config,
+    ) -> *mut gpiod_line_request {
+        if GPIOD_CHIP_REQUEST_LINES_RESULT.load(Ordering::SeqCst) {
+            return 1 as *mut gpiod_line_request;
+        }
+        ptr::null_mut()
+    }
+
     #[no_mangle]
     pub unsafe extern "C" fn gpiod_line_config_free(_ptr: *mut gpiod_line_config) {
         CONFIG_FREED.fetch_add(1, Ordering::SeqCst);
@@ -420,6 +464,20 @@ mod tests {
     ) {
         GPIOD_CONFIG_ADD_SETTINGS_RESULT.store(desired, Ordering::SeqCst);
         let result = Gpiod {}.config_add_settings(config, settings);
+        assert_eq!(result.is_err(), !desired);
+    }
+
+    #[test_case(ptr::null_mut(), ptr::null_mut(), false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_chip, 1 as *mut gpiod_line_config, false; "fail to request lines")]
+    #[test_case(1 as *mut gpiod_chip, 1 as *mut gpiod_line_config, true; "request lines")]
+    #[test]
+    fn test_gpio_chip_request_lines(
+        chip: *mut gpiod_chip,
+        line_cfg: *mut gpiod_line_config,
+        desired: bool,
+    ) {
+        GPIOD_CHIP_REQUEST_LINES_RESULT.store(desired, Ordering::SeqCst);
+        let result = Gpiod {}.chip_request_lines(chip, line_cfg);
         assert_eq!(result.is_err(), !desired);
     }
 
