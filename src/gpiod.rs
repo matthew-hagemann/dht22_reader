@@ -38,6 +38,19 @@ pub enum GpiodError {
     LineRequest,
 }
 
+// FIXME: this is the wrong abstraction, as ideally we want to make use of implementing drop on
+// structs in order for Rust to handle memory for us. IE, we should end up heading for:
+//
+// struct Chip {
+//     ptr: *mut gpiod_chip,
+// }
+// impl Drop for Chip {
+//     fn drop(&mut self) {
+//         if !self.ptr.is_null() {
+//             unsafe { gpiod_chip_close(self.ptr) }
+//         }
+//     }
+// }
 pub trait IGpiod {
     fn chip(&self, ptr: *const i8) -> Result<*mut gpiod_chip, GpiodError>;
 
