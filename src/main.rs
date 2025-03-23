@@ -83,9 +83,9 @@ fn main() {
 
     // Wait 1ms before pulling low
     std::thread::sleep(std::time::Duration::from_millis(1));
-    
+
     let request = gpiod.chip_request_lines(chip, config).unwrap();
-   
+
     // Pull high for 40us
     gpiod.line_request_set_value(request, OFFSET, 1).unwrap();
     std::thread::sleep(std::time::Duration::from_micros(40));
