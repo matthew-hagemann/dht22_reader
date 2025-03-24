@@ -86,9 +86,42 @@ fn main() {
 
     let request = gpiod.chip_request_lines(chip, config).unwrap();
 
+    // Once we have the request object, we can clean the rest up.
+    cleanup(Some(chip), Some(info), Some(settings), Some(config));
+
     // Pull high for 40us
     gpiod.line_request_set_value(request, OFFSET, 1).unwrap();
     std::thread::sleep(std::time::Duration::from_micros(40));
 
-    cleanup(Some(chip), Some(info), Some(settings), Some(config));
+    // Now reconfigure the line to read and wait input from the DHT22 sensor.
+    // New settings object for the same line
+    let settings = match gpiod.settings() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{}", e);
+            cleanup(Some(chip), Some(info), None, None);
+            return;
+        }
+    };
+    gpiod
+        .settings_set_direction(settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_INPUT)
+        .unwrap();
+
+    // Create config useing the settings object
+    let config = match gpiod.config() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}", e);
+            cleanup(Some(chip), Some(info), Some(settings), None);
+            return;
+        }
+    };
+
+    match gpiod.line_request_reconfigure_lines(request, config) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("{}", e);
+            cleanup(Some(chip), Some(info), Some(settings), Some(config));
+        }
+    }
 }

@@ -94,6 +94,12 @@ pub trait IGpiod {
         offset: ::std::os::raw::c_uint,
         value: gpiod_line_value,
     ) -> Result<(), GpiodError>;
+
+    fn line_request_reconfigure_lines(
+        &self,
+        request: *mut gpiod_line_request,
+        config: *mut gpiod_line_config,
+    ) -> Result<(), GpiodError>;
 }
 
 /// Concrete implementation of the GPIO device.
@@ -264,6 +270,26 @@ impl IGpiod for Gpiod {
         }
         Ok(())
     }
+
+    /// Reconfigures a line request.
+    ///
+    /// # Safety
+    /// - `request` must be a valid, non-null pointer to a `gpiod_line_request` instance.
+    /// - `config` must be a valid, non-null pointer to a `gpiod_line_config` instance.
+    fn line_request_reconfigure_lines(
+        &self,
+        request: *mut gpiod_line_request,
+        config: *mut gpiod_line_config,
+    ) -> Result<(), GpiodError> {
+        if request.is_null() || config.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
+        let result = unsafe { gpiod_line_request_reconfigure_lines(request, config) };
+        if result != 0 {
+            return Err(GpiodError::LineRequestSetValue);
+        }
+        Ok(())
+    }
 }
 
 // FIXME: Can this move into a Drop implementation?
@@ -422,6 +448,18 @@ mod tests {
         -1
     }
 
+    static GPIOD_LINE_REQUEST_RECONFIGURE_LINES_RESULT: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_request_reconfigure_lines(
+        _: *mut gpiod_line_request,
+        _: *mut gpiod_line_config,
+    ) -> i32 {
+        if GPIOD_LINE_REQUEST_RECONFIGURE_LINES_RESULT.load(Ordering::SeqCst) {
+            return 0;
+        }
+        -1
+    }
+
     #[no_mangle]
     pub unsafe extern "C" fn gpiod_line_config_free(_ptr: *mut gpiod_line_config) {
         CONFIG_FREED.fetch_add(1, Ordering::SeqCst);
@@ -549,6 +587,20 @@ mod tests {
     ) {
         GPIOD_LINE_REQUEST_SET_VALUE_RESULT.store(desired, Ordering::SeqCst);
         let result = Gpiod {}.line_request_set_value(request, offset, value);
+        assert_eq!(result.is_err(), !desired);
+    }
+
+    #[test_case(ptr::null_mut(), ptr::null_mut(), false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_line_request, 1 as *mut gpiod_line_config, false; "fail to reconfigure lines")]
+    #[test_case(1 as *mut gpiod_line_request, 1 as *mut gpiod_line_config, true; "reconfigure lines")]
+    #[test]
+    fn test_gpio_line_request_reconfigure_lines(
+        request: *mut gpiod_line_request,
+        config: *mut gpiod_line_config,
+        desired: bool,
+    ) {
+        GPIOD_LINE_REQUEST_RECONFIGURE_LINES_RESULT.store(desired, Ordering::SeqCst);
+        let result = Gpiod {}.line_request_reconfigure_lines(request, config);
         assert_eq!(result.is_err(), !desired);
     }
 
