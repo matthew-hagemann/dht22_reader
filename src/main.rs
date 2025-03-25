@@ -107,7 +107,7 @@ fn main() {
         .settings_set_direction(settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_INPUT)
         .unwrap();
 
-    // Create config useing the settings object
+    // Create config using the settings object
     let config = match gpiod.config() {
         Ok(c) => c,
         Err(e) => {

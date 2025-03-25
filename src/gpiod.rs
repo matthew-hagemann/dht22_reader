@@ -38,6 +38,8 @@ pub enum GpiodError {
     LineRequest,
     #[error("Failed to set line request value")]
     LineRequestSetValue,
+    #[error("Failed to get line request value")]
+    LineRequestGetValue,
 }
 
 // FIXME: this is the wrong abstraction, as ideally we want to make use of implementing drop on
@@ -100,6 +102,12 @@ pub trait IGpiod {
         request: *mut gpiod_line_request,
         config: *mut gpiod_line_config,
     ) -> Result<(), GpiodError>;
+
+    fn line_request_get_value(
+        &self,
+        request: *mut gpiod_line_request,
+        offset: ::std::os::raw::c_uint,
+    ) -> Result<i32, GpiodError>;
 }
 
 /// Concrete implementation of the GPIO device.
@@ -290,6 +298,25 @@ impl IGpiod for Gpiod {
         }
         Ok(())
     }
+
+    /// Gets the value of a GPIO line request.
+    ///
+    /// # Safety
+    /// - `request` must be a valid, non-null pointer to a `gpiod_line_request` instance.
+    fn line_request_get_value(
+        &self,
+        request: *mut gpiod_line_request,
+        offset: ::std::os::raw::c_uint,
+    ) -> Result<i32, GpiodError> {
+        if request.is_null() {
+            return Err(GpiodError::NullPtr);
+        }
+        let result = unsafe { gpiod_line_request_get_value(request, offset) };
+        if result == -1 {
+            return Err(GpiodError::LineRequestGetValue);
+        }
+        Ok(result)
+    }
 }
 
 // FIXME: Can this move into a Drop implementation?
@@ -460,6 +487,18 @@ mod tests {
         -1
     }
 
+    static GPIOD_LINE_REQUEST_GET_VALUE_RESULT: AtomicBool = AtomicBool::new(false);
+    #[no_mangle]
+    pub unsafe extern "C" fn gpiod_line_request_get_value(
+        _: *mut gpiod_line_request,
+        _: std::os::raw::c_uint,
+    ) -> i32 {
+        if GPIOD_LINE_REQUEST_GET_VALUE_RESULT.load(Ordering::SeqCst) {
+            return 1;
+        }
+        -1
+    }
+
     #[no_mangle]
     pub unsafe extern "C" fn gpiod_line_config_free(_ptr: *mut gpiod_line_config) {
         CONFIG_FREED.fetch_add(1, Ordering::SeqCst);
@@ -602,6 +641,23 @@ mod tests {
         GPIOD_LINE_REQUEST_RECONFIGURE_LINES_RESULT.store(desired, Ordering::SeqCst);
         let result = Gpiod {}.line_request_reconfigure_lines(request, config);
         assert_eq!(result.is_err(), !desired);
+    }
+
+    #[test_case(ptr::null_mut(), 0, false; "fail on null ptr input")]
+    #[test_case(1 as *mut gpiod_line_request, 0, false; "fail to get value")]
+    #[test_case(1 as *mut gpiod_line_request, 0, true; "get value")]
+    #[test]
+    fn test_gpio_line_request_get_value(
+        request: *mut gpiod_line_request,
+        offset: std::os::raw::c_uint,
+        desired: bool,
+    ) {
+        GPIOD_LINE_REQUEST_GET_VALUE_RESULT.store(desired, Ordering::SeqCst);
+        let result = Gpiod {}.line_request_get_value(request, offset);
+        assert_eq!(result.is_err(), !desired);
+        if desired {
+            assert_eq!(result.unwrap(), 1); // hardcoded value from mock
+        }
     }
 
     #[test]
