@@ -125,6 +125,7 @@ fn main() {
             cleanup(Some(chip), Some(info), Some(settings), Some(config));
         }
     }
+    cleanup(Some(chip), Some(info), Some(settings), Some(config));
 
     // Now we expect the sensor to pull low for 80us, then high for 80us as an ack:
     let pulse = expect_pulse(false, request).unwrap();
