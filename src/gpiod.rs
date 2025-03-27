@@ -40,6 +40,8 @@ pub enum GpiodError {
     LineRequestSetValue,
     #[error("Failed to get line request value")]
     LineRequestGetValue,
+    #[error("Timeout waiting for line request value")]
+    Timeout,
 }
 
 // FIXME: this is the wrong abstraction, as ideally we want to make use of implementing drop on

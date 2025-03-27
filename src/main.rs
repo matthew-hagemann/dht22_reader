@@ -12,11 +12,12 @@ include!("bindings/bindings.rs");
 // now.
 // Chip: A chip with pins on it. RPI's just have the 1, which will be at index 0
 const GPIO_CHIP_PATH: &str = "/dev/gpiochip0";
+const TIMEOUT: u128 = 100;
 
 mod gpiod;
 
-use gpiod::{cleanup, Gpiod, IGpiod, OFFSET};
-use std::ffi::CString;
+use gpiod::{cleanup, Gpiod, GpiodError, IGpiod, OFFSET};
+use std::{ffi::CString, time::Instant};
 
 fn main() {
     let path = CString::new(GPIO_CHIP_PATH).expect("CString::new failed");
@@ -123,5 +124,26 @@ fn main() {
             eprintln!("{}", e);
             cleanup(Some(chip), Some(info), Some(settings), Some(config));
         }
+    }
+
+    // Now we expect the sensor to pull low for 80us, then high for 80us as an ack:
+    let pulse = expect_pulse(false, request).unwrap();
+    println!("Pulse low: {}us", pulse);
+    let pulse = expect_pulse(true, request).unwrap();
+    println!("Pulse high: {}us", pulse);
+
+    fn expect_pulse(
+        value: bool,
+        request: *mut gpiod::gpiod_line_request,
+    ) -> Result<u128, GpiodError> {
+        let start = Instant::now();
+
+        while (Gpiod {}.line_request_get_value(request, OFFSET).unwrap() == value) {
+            if start.elapsed().as_micros() > TIMEOUT {
+                return Err(GpiodError::Timeout);
+            }
+        }
+
+        Ok(start.elapsed().as_micros())
     }
 }
