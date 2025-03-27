@@ -14,7 +14,7 @@ use thiserror::Error;
 
 // The pin/line. Refered to as offsets in documentation as when you have multiple chips and want to
 // refer to a specific pin, you refer to it by its offset from its chip index.
-pub const OFFSET: std::os::raw::c_uint = 21;
+pub const OFFSET: std::os::raw::c_uint = 4;
 
 #[derive(Error, Debug)]
 pub enum GpiodError {
