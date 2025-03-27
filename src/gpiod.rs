@@ -658,7 +658,7 @@ mod tests {
         let result = Gpiod {}.line_request_get_value(request, offset);
         assert_eq!(result.is_err(), !desired);
         if desired {
-            assert_eq!(result.unwrap(), true); // hardcoded value from mock
+            assert!(result.unwrap()); // hardcoded value from mock
         }
     }
 
