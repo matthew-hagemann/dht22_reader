@@ -107,7 +107,7 @@ pub trait IGpiod {
         &self,
         request: *mut gpiod_line_request,
         offset: ::std::os::raw::c_uint,
-    ) -> Result<i32, GpiodError>;
+    ) -> Result<bool, GpiodError>;
 }
 
 /// Concrete implementation of the GPIO device.
@@ -307,7 +307,7 @@ impl IGpiod for Gpiod {
         &self,
         request: *mut gpiod_line_request,
         offset: ::std::os::raw::c_uint,
-    ) -> Result<i32, GpiodError> {
+    ) -> Result<bool, GpiodError> {
         if request.is_null() {
             return Err(GpiodError::NullPtr);
         }
@@ -315,7 +315,7 @@ impl IGpiod for Gpiod {
         if result == -1 {
             return Err(GpiodError::LineRequestGetValue);
         }
-        Ok(result)
+        Ok(result == 1)
     }
 }
 
@@ -656,7 +656,7 @@ mod tests {
         let result = Gpiod {}.line_request_get_value(request, offset);
         assert_eq!(result.is_err(), !desired);
         if desired {
-            assert_eq!(result.unwrap(), 1); // hardcoded value from mock
+            assert_eq!(result.unwrap(), true); // hardcoded value from mock
         }
     }
 
