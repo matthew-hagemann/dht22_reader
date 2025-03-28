@@ -64,12 +64,22 @@ fn main() {
     // The DHT22 protocol initiate reading data by setting the pin to a pull up bias. Then, we pull
     // low for between 1~10ms. We then pull up for 20-40us (will let the bias take care of that)
     // and await a response from the sensor.
-    gpiod
-        .settings_set_direction(settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_OUTPUT)
-        .unwrap();
-    gpiod
-        .settings_set_drive(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP)
-        .unwrap();
+    match gpiod.settings_set_direction(settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_OUTPUT) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error setting direction: {}", e);
+            cleanup(Some(chip), Some(info), Some(settings), None);
+            return;
+        }
+    }
+    match gpiod.settings_set_drive(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error setting bias: {}", e);
+            cleanup(Some(chip), Some(info), Some(settings), None);
+            return;
+        }
+    }
 
     let config = match gpiod.config() {
         Ok(c) => c,
