@@ -26,8 +26,13 @@ fn generate_bindings() {
 
 fn main() {
     // Tell cargo to rerun build if any of the included headers change
+    let target = std::env::var("TARGET").unwrap();
+    if target.contains("aarch64") {
+        println!("cargo:rustc-link-search=native=/lib/aarch64-linux-gnu");
+    } else if target.contains("x86_64") {
+        println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu");
+    }
     println!("cargo:rerun-if-changed=wrapper.h");
-    println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu");
     println!("cargo:rustc-link-lib=gpiod");
 
     #[cfg(feature = "generate-bindings")]
