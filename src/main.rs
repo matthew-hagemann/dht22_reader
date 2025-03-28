@@ -28,7 +28,7 @@ fn main() {
     let chip = match gpiod.chip(path_ptr) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error creating chip: {}", e);
             return;
         }
     };
@@ -36,7 +36,7 @@ fn main() {
     let info = match gpiod.info(chip) {
         Ok(i) => i,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error obtaining chip info: {}", e);
             cleanup(Some(chip), None, None, None);
             return;
         }
@@ -45,7 +45,7 @@ fn main() {
     let name = match gpiod.name(info) {
         Ok(n) => n,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error obtaining chip name: {}", e);
             cleanup(Some(chip), Some(info), None, None);
             return;
         }
@@ -55,7 +55,7 @@ fn main() {
     let settings = match gpiod.settings() {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error creating new settings object: {}", e);
             cleanup(Some(chip), Some(info), None, None);
             return;
         }
@@ -74,24 +74,45 @@ fn main() {
     let config = match gpiod.config() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error creating new config object: {}", e);
             cleanup(Some(chip), Some(info), Some(settings), None);
             return;
         }
     };
 
-    gpiod.config_add_settings(config, settings).unwrap();
+    match gpiod.config_add_settings(config, settings) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error adding settings to config: {}", e);
+            cleanup(Some(chip), Some(info), Some(settings), Some(config));
+            return;
+        }
+    }
 
     // Wait 1ms before pulling low
     std::thread::sleep(std::time::Duration::from_millis(1));
 
-    let request = gpiod.chip_request_lines(chip, config).unwrap();
+    let request = match gpiod.chip_request_lines(chip, config) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Error requesting line: {}", e);
+            cleanup(Some(chip), Some(info), Some(settings), Some(config));
+            return;
+        }
+    };
 
     // Once we have the request object, we can clean the rest up.
     cleanup(Some(chip), Some(info), Some(settings), Some(config));
 
     // Pull high for 40us
-    gpiod.line_request_set_value(request, OFFSET, 1).unwrap();
+    match gpiod.line_request_set_value(request, OFFSET, 1) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error setting line value: {}", e);
+            cleanup(Some(chip), Some(info), None, None);
+            return;
+        }
+    }
     std::thread::sleep(std::time::Duration::from_micros(40));
 
     // Now reconfigure the line to read and wait input from the DHT22 sensor.
@@ -99,7 +120,7 @@ fn main() {
     let settings = match gpiod.settings() {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error creating new settings object: {}", e);
             cleanup(Some(chip), Some(info), None, None);
             return;
         }
@@ -112,7 +133,7 @@ fn main() {
     let config = match gpiod.config() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error creating new config object: {}", e);
             cleanup(Some(chip), Some(info), Some(settings), None);
             return;
         }
@@ -121,7 +142,7 @@ fn main() {
     match gpiod.line_request_reconfigure_lines(request, config) {
         Ok(_) => (),
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error reconfiguring line: {}", e);
             cleanup(Some(chip), Some(info), Some(settings), Some(config));
         }
     }
