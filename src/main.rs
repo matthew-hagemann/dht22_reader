@@ -111,6 +111,16 @@ fn main() {
         }
     };
 
+    match gpiod.line_request_set_value(request, OFFSET, 0) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error pulling line low: {}", e);
+            cleanup(Some(chip), Some(info), None, None);
+            return;
+        }
+    }
+    std::thread::sleep(std::time::Duration::from_millis(1));
+
     // Pull high for 40us
     match gpiod.line_request_set_value(request, OFFSET, 1) {
         Ok(_) => (),
@@ -133,7 +143,10 @@ fn main() {
         }
     };
     gpiod
-        .settings_set_direction(new_settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_INPUT)
+        .settings_set_direction(
+            new_settings,
+            gpiod_line_direction_GPIOD_LINE_DIRECTION_INPUT,
+        )
         .unwrap();
 
     // Create config using the settings object
