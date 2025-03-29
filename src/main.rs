@@ -81,6 +81,15 @@ fn main() {
         }
     }
 
+    match gpiod.settings_set_drive(settings, gpiod_line_drive_GPIOD_LINE_DRIVE_PUSH_PULL) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error setting drive: {}", e);
+            cleanup(Some(chip), Some(info), Some(settings), None);
+            return;
+        }
+    }
+
     let config = match gpiod.config() {
         Ok(c) => c,
         Err(e) => {
