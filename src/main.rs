@@ -144,7 +144,6 @@ fn main() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error creating new config object: {}", e);
-            cleanup(Some(chip), Some(info), Some(settings), None);
             return;
         }
     };
@@ -153,10 +152,9 @@ fn main() {
         Ok(_) => (),
         Err(e) => {
             eprintln!("Error reconfiguring line: {}", e);
-            cleanup(Some(chip), Some(info), Some(settings), Some(config));
+            return;
         }
     }
-    cleanup(Some(chip), Some(info), Some(settings), Some(config));
 
     // Now we expect the sensor to pull low for 80us, then high for 80us as an ack:
     let pulse = expect_pulse(false, request).unwrap();
