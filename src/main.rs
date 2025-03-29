@@ -111,9 +111,6 @@ fn main() {
         }
     };
 
-    // Once we have the request object, we can clean the rest up.
-    cleanup(Some(chip), Some(info), Some(settings), Some(config));
-
     // Pull high for 40us
     match gpiod.line_request_set_value(request, OFFSET, 1) {
         Ok(_) => (),
@@ -156,24 +153,24 @@ fn main() {
         }
     }
 
+    // Once we have the request object, we can clean the rest up.
+    cleanup(Some(chip), Some(info), Some(settings), Some(config));
+
     // Now we expect the sensor to pull low for 80us, then high for 80us as an ack:
     let pulse = expect_pulse(false, request).unwrap();
     println!("Pulse low: {}us", pulse);
     let pulse = expect_pulse(true, request).unwrap();
     println!("Pulse high: {}us", pulse);
+}
 
-    fn expect_pulse(
-        value: bool,
-        request: *mut gpiod::gpiod_line_request,
-    ) -> Result<u128, GpiodError> {
-        let start = Instant::now();
+fn expect_pulse(value: bool, request: *mut gpiod::gpiod_line_request) -> Result<u128, GpiodError> {
+    let start = Instant::now();
 
-        while (Gpiod {}.line_request_get_value(request, OFFSET).unwrap() == value) {
-            if start.elapsed().as_micros() > TIMEOUT {
-                return Err(GpiodError::Timeout);
-            }
+    while (Gpiod {}.line_request_get_value(request, OFFSET).unwrap() == value) {
+        if start.elapsed().as_micros() > TIMEOUT {
+            return Err(GpiodError::Timeout);
         }
-
-        Ok(start.elapsed().as_micros())
     }
+
+    Ok(start.elapsed().as_micros())
 }
