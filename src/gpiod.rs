@@ -66,7 +66,7 @@ pub trait IGpiod {
 
     fn settings(&self) -> Result<*mut gpiod_line_settings, GpiodError>;
 
-    fn settings_set_drive(
+    fn settings_set_bias(
         &self,
         settings: *mut gpiod_line_settings,
         bias: gpiod_line_bias,
@@ -172,11 +172,11 @@ impl IGpiod for Gpiod {
         }
         Ok(result)
     }
-    /// Sets the drive bias for a GPIO line.
+    /// Sets the bias for a GPIO line.
     ///
     /// # Safety
     /// - `settings` must be a valid, non-null pointer to a `gpiod_line_settings` instance.
-    fn settings_set_drive(
+    fn settings_set_bias(
         &self,
         settings: *mut gpiod_line_settings,
         bias: gpiod_line_bias,
@@ -184,7 +184,7 @@ impl IGpiod for Gpiod {
         if settings.is_null() {
             return Err(GpiodError::NullPtr);
         }
-        let result = unsafe { gpiod_line_settings_set_drive(settings, bias) };
+        let result = unsafe { gpiod_line_settings_set_bias(settings, bias) };
         if result != 0 {
             return Err(GpiodError::SetBias(bias));
         }
@@ -404,7 +404,7 @@ mod tests {
     // Mock result for gpiod_line_settings_set_drive
     static GPIOD_SETTINGS_DRIVE_SET: AtomicBool = AtomicBool::new(false);
     #[no_mangle]
-    pub unsafe extern "C" fn gpiod_line_settings_set_drive(
+    pub unsafe extern "C" fn gpiod_line_settings_set_bias(
         _: *mut gpiod_line_settings,
         _: gpiod_line_bias,
     ) -> i32 {
@@ -565,7 +565,7 @@ mod tests {
     #[test]
     fn test_gpio_set_drive(settings: *mut gpiod_line_settings, desired: bool) {
         GPIOD_SETTINGS_DRIVE_SET.store(desired, Ordering::SeqCst);
-        let result = Gpiod {}.settings_set_drive(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP);
+        let result = Gpiod {}.settings_set_bias(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP);
         assert_eq!(result.is_err(), !desired);
     }
 

@@ -72,7 +72,7 @@ fn main() {
             return;
         }
     }
-    match gpiod.settings_set_drive(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP) {
+    match gpiod.settings_set_bias(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP) {
         Ok(_) => (),
         Err(e) => {
             eprintln!("Error setting bias: {}", e);
