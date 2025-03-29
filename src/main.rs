@@ -124,7 +124,7 @@ fn main() {
 
     // Now reconfigure the line to read and wait input from the DHT22 sensor.
     // New settings object for the same line
-    let settings = match gpiod.settings() {
+    let new_settings = match gpiod.settings() {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Error creating new settings object: {}", e);
@@ -137,7 +137,7 @@ fn main() {
         .unwrap();
 
     // Create config using the settings object
-    let config = match gpiod.config() {
+    let new_config = match gpiod.config() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error creating new config object: {}", e);
@@ -145,7 +145,16 @@ fn main() {
         }
     };
 
-    match gpiod.line_request_reconfigure_lines(request, config) {
+    match gpiod.config_add_settings(new_config, new_settings) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error adding settings to new config: {}", e);
+            cleanup(Some(chip), Some(info), Some(new_settings), Some(new_config));
+            return;
+        }
+    };
+
+    match gpiod.line_request_reconfigure_lines(request, new_config) {
         Ok(_) => (),
         Err(e) => {
             eprintln!("Error reconfiguring line: {}", e);
