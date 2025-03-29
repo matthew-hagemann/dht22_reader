@@ -45,6 +45,7 @@ make -j$(nproc)
 
 ```
 sudo make install
+sudo ldconfig
 ```
 
 # Regenerate bindings
