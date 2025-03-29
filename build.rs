@@ -26,7 +26,6 @@ fn generate_bindings() {
 
 fn main() {
     // Tell cargo to rerun build if any of the included headers change
-    let target = std::env::var("TARGET").unwrap();
     println!("cargo:rustc-link-search=native=/usr/local/lib");
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rustc-link-lib=gpiod");
