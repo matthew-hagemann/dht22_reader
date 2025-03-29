@@ -12,7 +12,7 @@ include!("bindings/bindings.rs");
 // now.
 // Chip: A chip with pins on it. RPI's just have the 1, which will be at index 0
 const GPIO_CHIP_PATH: &str = "/dev/gpiochip0";
-const TIMEOUT: u128 = 100;
+const TIMEOUT: u128 = 1000;
 
 mod gpiod;
 
@@ -133,7 +133,7 @@ fn main() {
         }
     };
     gpiod
-        .settings_set_direction(settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_INPUT)
+        .settings_set_direction(new_settings, gpiod_line_direction_GPIOD_LINE_DIRECTION_INPUT)
         .unwrap();
 
     // Create config using the settings object
