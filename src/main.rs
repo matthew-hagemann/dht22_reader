@@ -17,7 +17,7 @@ const TIMEOUT: u128 = 1000;
 mod gpiod;
 
 use gpiod::{cleanup, Gpiod, GpiodError, IGpiod, OFFSET};
-use std::{ffi::CString, time::Instant};
+use std::{ffi::CString, slice::range, time::Instant};
 
 fn main() {
     let path = CString::new(GPIO_CHIP_PATH).expect("CString::new failed");
@@ -72,7 +72,7 @@ fn main() {
             return;
         }
     }
-    match gpiod.settings_set_bias(settings, gpiod_line_bias_GPIOD_LINE_BIAS_PULL_UP) {
+    match gpiod.settings_set_bias(settings, gpiod_line_bias_GPIOD_LINE_BIAS_DISABLED) {
         Ok(_) => (),
         Err(e) => {
             eprintln!("Error setting bias: {}", e);
@@ -81,7 +81,7 @@ fn main() {
         }
     }
 
-    match gpiod.settings_set_drive(settings, gpiod_line_drive_GPIOD_LINE_DRIVE_PUSH_PULL) {
+    match gpiod.settings_set_drive(settings, gpiod_line_drive_GPIOD_LINE_DRIVE_OPEN_DRAIN) {
         Ok(_) => (),
         Err(e) => {
             eprintln!("Error setting drive: {}", e);
@@ -192,6 +192,12 @@ fn main() {
     println!("Pulse low: {}us", pulse);
     let pulse = expect_pulse(true, request).unwrap();
     println!("Pulse high: {}us", pulse);
+
+    println!("Printing pulses in a loop");
+    for n in 1..100 {
+        let pulse = expect_pulse(true, request).unwrap();
+        println!("{}: Pulse high: {}us", n, pulse);
+    }
 }
 
 fn expect_pulse(value: bool, request: *mut gpiod::gpiod_line_request) -> Result<u128, GpiodError> {
