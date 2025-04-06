@@ -17,7 +17,7 @@ const TIMEOUT: u128 = 1000;
 mod gpiod;
 
 use gpiod::{cleanup, Gpiod, GpiodError, IGpiod, OFFSET};
-use std::{ffi::CString, slice::range, time::Instant};
+use std::{ffi::CString, time::Instant};
 
 fn main() {
     let path = CString::new(GPIO_CHIP_PATH).expect("CString::new failed");
