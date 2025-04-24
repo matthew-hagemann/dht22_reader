@@ -58,7 +58,7 @@ pub enum GpiodError {
 //     }
 // }
 pub trait IGpiod {
-    fn chip(&self, ptr: *const i8) -> Result<*mut gpiod_chip, GpiodError>;
+    fn chip(&self, ptr: *const u8) -> Result<*mut gpiod_chip, GpiodError>;
 
     fn info(&self, chip: *mut gpiod_chip) -> Result<*mut gpiod_chip_info, GpiodError>;
 
@@ -126,7 +126,7 @@ impl IGpiod for Gpiod {
     ///
     /// # Safety
     /// - The returned `gpiod_chip` pointer must be freed properly.
-    fn chip(&self, ptr: *const i8) -> Result<*mut gpiod_chip, GpiodError> {
+    fn chip(&self, ptr: *const u8) -> Result<*mut gpiod_chip, GpiodError> {
         let result = unsafe { gpiod_chip_open(ptr) };
         if result.is_null() {
             return Err(GpiodError::OpenChip);
@@ -555,10 +555,10 @@ mod tests {
         CHIP_FREED.fetch_add(1, Ordering::SeqCst);
     }
 
-    #[test_case(b"dummy\0".as_ptr() as *const i8; "create chip")]
+    #[test_case(b"dummy\0".as_ptr() as *const u8; "create chip")]
     #[test_case(ptr::null_mut(); "fail to create chip")]
     #[test]
-    fn test_gpio_chip_open(ptr: *const i8) {
+    fn test_gpio_chip_open(ptr: *const u8) {
         let chip = Gpiod {}.chip(ptr);
         if ptr.is_null() {
             assert!(chip.is_err());
