@@ -555,7 +555,7 @@ mod tests {
         CHIP_FREED.fetch_add(1, Ordering::SeqCst);
     }
 
-    #[test_case(b"dummy\0".as_ptr() as *const u8; "create chip")]
+    #[test_case(b"dummy\0".as_ptr(); "create chip")]
     #[test_case(ptr::null_mut(); "fail to create chip")]
     #[test]
     fn test_gpio_chip_open(ptr: *const u8) {
